@@ -63,9 +63,10 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (void)addViewController: (NSViewController <MASPreferencesViewController> *) viewController
 {
-	[_viewControllers addObject: viewController];
-	[_toolbar insertItemWithItemIdentifier: [viewController identifier] atIndex: ([_viewControllers count] - 1)];
-	[_toolbar validateVisibleItems];
+	[self.viewControllers addObject: viewController];
+	NSInteger index = (NSInteger)([self.viewControllers count] - 1);
+	[self.toolbar insertItemWithItemIdentifier: [viewController identifier] atIndex: index];
+	[self.toolbar validateVisibleItems];
 }
 
 #pragma mark -
@@ -87,7 +88,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 }
 
 - (NSViewController <MASPreferencesViewController> *)firstViewController {
-    for (id viewController in self.viewControllers)
+    for (NSViewController <MASPreferencesViewController> *viewController in self.viewControllers)
         if ([viewController isKindOfClass:[NSViewController class]])
             return viewController;
 
@@ -119,9 +120,9 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (NSArray *)toolbarItemIdentifiers
 {
-    NSMutableArray *identifiers = [NSMutableArray arrayWithCapacity:_viewControllers.count];
-    for (id viewController in _viewControllers)
-        if (viewController == [NSNull null])
+    NSMutableArray *identifiers = [NSMutableArray arrayWithCapacity:self.viewControllers.count];
+    for (NSViewController <MASPreferencesViewController> *viewController in self.viewControllers)
+        if ((id)viewController == [NSNull null])
             [identifiers addObject:NSToolbarFlexibleSpaceItemIdentifier];
         else
             [identifiers addObject:[viewController identifier]];
@@ -164,7 +165,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
     NSUInteger controllerIndex = [identifiers indexOfObject:itemIdentifier];
     if (controllerIndex != NSNotFound)
     {
-        id <MASPreferencesViewController> controller = [_viewControllers objectAtIndex:controllerIndex];
+        id <MASPreferencesViewController> controller = [self.viewControllers objectAtIndex:controllerIndex];
         toolbarItem.image = controller.toolbarItemImage;
         toolbarItem.label = controller.toolbarItemLabel;
         toolbarItem.target = self;
@@ -205,8 +206,8 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (NSViewController <MASPreferencesViewController> *)viewControllerForIdentifier:(NSString *)identifier
 {
-    for (id viewController in self.viewControllers) {
-        if (viewController == [NSNull null]) continue;
+    for (NSViewController <MASPreferencesViewController> *viewController in self.viewControllers) {
+        if ((id)viewController == [NSNull null]) continue;
         if ([[viewController identifier] isEqualToString:identifier])
             return viewController;
     }
@@ -327,7 +328,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (void)selectControllerAtIndex:(NSUInteger)controllerIndex
 {
-    if (NSLocationInRange(controllerIndex, NSMakeRange(0, _viewControllers.count)))
+    if (NSLocationInRange(controllerIndex, NSMakeRange(0, self.viewControllers.count)))
         self.selectedViewController = [self.viewControllers objectAtIndex:controllerIndex];
 }
 
@@ -337,10 +338,10 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 - (IBAction)goNextTab:(id)sender
 {
     NSUInteger selectedIndex = self.indexOfSelectedController;
-    NSUInteger numberOfControllers = [_viewControllers count];
+    NSUInteger numberOfControllers = [self.viewControllers count];
 
     do { selectedIndex = (selectedIndex + 1) % numberOfControllers; }
-    while ([_viewControllers objectAtIndex:selectedIndex] == [NSNull null]);
+    while ([self.viewControllers objectAtIndex:selectedIndex] == [NSNull null]);
 
     [self selectControllerAtIndex:selectedIndex];
 }
@@ -348,10 +349,10 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 - (IBAction)goPreviousTab:(id)sender
 {
     NSUInteger selectedIndex = self.indexOfSelectedController;
-    NSUInteger numberOfControllers = [_viewControllers count];
+    NSUInteger numberOfControllers = [self.viewControllers count];
 
     do { selectedIndex = (selectedIndex + numberOfControllers - 1) % numberOfControllers; }
-    while ([_viewControllers objectAtIndex:selectedIndex] == [NSNull null]);
+    while ([self.viewControllers objectAtIndex:selectedIndex] == [NSNull null]);
 
     [self selectControllerAtIndex:selectedIndex];
 }

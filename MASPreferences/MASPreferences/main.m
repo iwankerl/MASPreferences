@@ -6,7 +6,7 @@
 //  Copyright (c) 2014 Kerlmax LLC. All rights reserved.
 //
 
-#import <Cocoa/Cocoa.h>
+@import Cocoa;
 
 int main(int argc, const char * argv[])
 {
