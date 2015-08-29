@@ -52,6 +52,11 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[self window] setDelegate:nil];
+    for (NSToolbarItem *item in [self.toolbar items]) {
+        item.target = nil;
+        item.action = nil;
+    }
+    self.toolbar.delegate = nil;
 #if !__has_feature(objc_arc)
     [_viewControllers release];
     [_selectedViewController release];
@@ -180,30 +185,6 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 #pragma mark -
 #pragma mark Private methods
 
-- (void)clearResponderChain
-{
-    // Remove view controller from the responder chain
-    NSResponder *chainedController = self.window.nextResponder;
-    if ([self.viewControllers indexOfObject:chainedController] == NSNotFound)
-        return;
-    self.window.nextResponder = chainedController.nextResponder;
-    chainedController.nextResponder = nil;
-}
-
-- (void)patchResponderChain
-{
-    [self clearResponderChain];
-    
-    NSViewController *selectedController = self.selectedViewController;
-    if (!selectedController)
-        return;
-    
-    // Add current controller to the responder chain
-    NSResponder *nextResponder = self.window.nextResponder;
-    self.window.nextResponder = selectedController;
-    selectedController.nextResponder = nextResponder;
-}
-
 - (NSViewController <MASPreferencesViewController> *)viewControllerForIdentifier:(NSString *)identifier
 {
     for (NSViewController <MASPreferencesViewController> *viewController in self.viewControllers) {
@@ -235,6 +216,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 #else
         [self.window setContentView:[[[NSView alloc] init] autorelease]];
 #endif
+        [_selectedViewController setNextResponder:nil];
         if ([_selectedViewController respondsToSelector:@selector(viewDidDisappear)])
             [_selectedViewController viewDidDisappear];
 
@@ -299,8 +281,12 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 #else
     _selectedViewController = [controller retain];
 #endif
-    if ([controller respondsToSelector:@selector(viewWillAppear)])
-        [controller viewWillAppear];
+    // In OSX 10.10, setContentView below calls viewWillAppear.  We still want to call viewWillAppear on < 10.10,
+    // so the check below avoids calling viewWillAppear twice on 10.10.
+    // See https://github.com/shpakovski/MASPreferences/issues/32 for more info.
+    if (![NSViewController instancesRespondToSelector:@selector(viewWillAppear)])
+        if ([controller respondsToSelector:@selector(viewWillAppear)])
+            [controller viewWillAppear];
     
     [self.window setContentView:controllerView];
     [self.window recalculateKeyViewLoop];
@@ -311,8 +297,11 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
             [self.window selectKeyViewFollowingView:controllerView];
     }
     
-    // Insert view controller into responder chain
-    [self patchResponderChain];
+    // Insert view controller into responder chain on 10.9 and earlier
+    if (controllerView.nextResponder != controller) {
+      controller.nextResponder = controllerView.nextResponder;
+      controllerView.nextResponder = controller;
+    }
 
     [[NSNotificationCenter defaultCenter] postNotificationName:kMASPreferencesWindowControllerDidChangeViewNotification object:self];
 }
@@ -330,6 +319,11 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 {
     if (NSLocationInRange(controllerIndex, NSMakeRange(0, self.viewControllers.count)))
         self.selectedViewController = [self.viewControllers objectAtIndex:controllerIndex];
+}
+
+- (void)selectControllerWithIdentifier:(NSString *)identifier 
+{
+    self.selectedViewController = [self viewControllerForIdentifier:identifier];
 }
 
 #pragma mark -

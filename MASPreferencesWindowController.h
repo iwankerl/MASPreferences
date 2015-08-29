@@ -23,20 +23,21 @@ __attribute__((__visibility__("default")))
     NSMutableDictionary *_minimumViewRects;
     NSString *_title;
     NSViewController <MASPreferencesViewController> *_selectedViewController;
-	IBOutlet NSToolbar *toolbar;
+    NSToolbar * __unsafe_unretained _toolbar;
 }
 
 @property (nonatomic, readonly) NSMutableArray *viewControllers;
 @property (nonatomic, readonly) NSUInteger indexOfSelectedController;
 @property (nonatomic, readonly, retain) NSViewController <MASPreferencesViewController> *selectedViewController;
 @property (nonatomic, readonly) NSString *title;
-@property (nonatomic, retain) IBOutlet NSToolbar *toolbar;
+@property (nonatomic, assign) IBOutlet NSToolbar *toolbar;
 
 - (id)initWithViewControllers:(NSArray *)viewControllers;
 - (id)initWithViewControllers:(NSArray *)viewControllers title:(NSString *)title;
 - (void)addViewController:(NSViewController <MASPreferencesViewController> *) viewController;
 
 - (void)selectControllerAtIndex:(NSUInteger)controllerIndex;
+- (void)selectControllerWithIdentifier:(NSString *)identifier;
 
 - (IBAction)goNextTab:(id)sender;
 - (IBAction)goPreviousTab:(id)sender;
