@@ -1,11 +1,12 @@
 #import "MASPreferencesWindowController.h"
+#import "MASPreferencesViewController.h"
 
 NSString *const kMASPreferencesWindowControllerDidChangeViewNotification = @"MASPreferencesWindowControllerDidChangeViewNotification";
 
 static NSString *const kMASPreferencesFrameTopLeftKey = @"MASPreferences Frame Top Left";
 static NSString *const kMASPreferencesSelectedViewKey = @"MASPreferences Selected Identifier View";
 
-static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
+static NSString * PreferencesKeyForViewBounds (NSString *identifier)
 {
     return [NSString stringWithFormat:@"MASPreferences %@ Frame", identifier];
 }
@@ -27,21 +28,21 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 @synthesize selectedViewController = _selectedViewController;
 @synthesize title = _title;
 @synthesize toolbar = _toolbar;
+
 #pragma mark -
 
-- (id)initWithViewControllers:(NSArray *)viewControllers
+- (instancetype)initWithViewControllers:(NSArray *)viewControllers
 {
     return [self initWithViewControllers:viewControllers title:nil];
 }
 
-- (id)initWithViewControllers:(NSArray *)viewControllers title:(NSString *)title
+- (instancetype)initWithViewControllers:(NSArray *)viewControllers title:(NSString *)title
 {
-    if ((self = [super initWithWindowNibName:@"MASPreferencesWindow"]))
+	NSParameterAssert(viewControllers.count > 0);
+    NSString *nibPath = [[NSBundle bundleForClass:MASPreferencesWindowController.class] pathForResource:@"MASPreferencesWindow" ofType:@"nib"];
+    if ((self = [super initWithWindowNibPath:nibPath owner:self]))
     {
-		_viewControllers = [NSMutableArray arrayWithArray: viewControllers];
-#if !__has_feature(objc_arc)
-        _viewControllers = [_viewControllers retain];
-#endif
+		_viewControllers = [viewControllers mutableCopy];
         _minimumViewRects = [[NSMutableDictionary alloc] init];
         _title = [title copy];
     }
@@ -57,27 +58,28 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
         item.action = nil;
     }
     self.toolbar.delegate = nil;
-#if !__has_feature(objc_arc)
-    [_viewControllers release];
-    [_selectedViewController release];
-    [_minimumViewRects release];
-    [_title release];
-    [super dealloc];
-#endif
 }
 
-- (void)addViewController: (NSViewController <MASPreferencesViewController> *) viewController
+- (void)addViewController:(NSViewController <MASPreferencesViewController> *)viewController
 {
-	[self.viewControllers addObject: viewController];
-	NSInteger index = (NSInteger)([self.viewControllers count] - 1);
-	[self.toolbar insertItemWithItemIdentifier: [viewController identifier] atIndex: index];
-	[self.toolbar validateVisibleItems];
+	NSParameterAssert(viewController);
+	[_viewControllers addObject: viewController];
+	[_toolbar insertItemWithItemIdentifier: viewController.viewIdentifier atIndex: ([_viewControllers count] - 1)];
+	[_toolbar validateVisibleItems];
 }
 
 #pragma mark -
 
 - (void)windowDidLoad
 {
+    BOOL hasImages = NO;
+    for (id viewController in self.viewControllers)
+        if ([viewController respondsToSelector:@selector(toolbarItemImage)])
+            hasImages = YES;
+
+    if(hasImages == NO)
+        [[[self window] toolbar] setDisplayMode:NSToolbarDisplayModeLabelOnly];
+
     if ([self.title length] > 0)
         [[self window] setTitle:self.title];
 
@@ -86,7 +88,10 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
     NSString *origin = [[NSUserDefaults standardUserDefaults] stringForKey:kMASPreferencesFrameTopLeftKey];
     if (origin)
+    {
+        [self.window layoutIfNeeded];
         [self.window setFrameTopLeftPoint:NSPointFromString(origin)];
+    }
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(windowDidMove:)   name:NSWindowDidMoveNotification object:self.window];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(windowDidResize:) name:NSWindowDidResizeNotification object:self.window];
@@ -103,21 +108,21 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 #pragma mark -
 #pragma mark NSWindowDelegate
 
-- (BOOL)windowShouldClose:(id)sender
+- (BOOL)windowShouldClose:(id __unused)sender
 {
     return !self.selectedViewController || [self.selectedViewController commitEditing];
 }
 
-- (void)windowDidMove:(NSNotification*)aNotification
+- (void)windowDidMove:(NSNotification* __unused)aNotification
 {
     [[NSUserDefaults standardUserDefaults] setObject:NSStringFromPoint(NSMakePoint(NSMinX([self.window frame]), NSMaxY([self.window frame]))) forKey:kMASPreferencesFrameTopLeftKey];
 }
 
-- (void)windowDidResize:(NSNotification*)aNotification
+- (void)windowDidResize:(NSNotification* __unused)aNotification
 {
     NSViewController <MASPreferencesViewController> *viewController = self.selectedViewController;
     if (viewController)
-        [[NSUserDefaults standardUserDefaults] setObject:NSStringFromRect([viewController.view bounds]) forKey:PreferencesKeyForViewBounds(viewController.identifier)];
+        [[NSUserDefaults standardUserDefaults] setObject:NSStringFromRect([viewController.view bounds]) forKey:PreferencesKeyForViewBounds(viewController.viewIdentifier)];
 }
 
 #pragma mark -
@@ -130,7 +135,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
         if ((id)viewController == [NSNull null])
             [identifiers addObject:NSToolbarFlexibleSpaceItemIdentifier];
         else
-            [identifiers addObject:[viewController identifier]];
+            [identifiers addObject:[viewController viewIdentifier]];
     return identifiers;
 }
 
@@ -138,47 +143,45 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (NSUInteger)indexOfSelectedController
 {
-    NSUInteger index = [self.toolbarItemIdentifiers indexOfObject:self.selectedViewController.identifier];
+    NSUInteger index = [self.toolbarItemIdentifiers indexOfObject:self.selectedViewController.viewIdentifier];
     return index;
 }
 
 #pragma mark -
 #pragma mark NSToolbarDelegate
 
-- (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
+- (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar * __unused)toolbar
 {
     NSArray *identifiers = self.toolbarItemIdentifiers;
     return identifiers;
 }                   
                    
-- (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
+- (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar * __unused)toolbar
 {
     NSArray *identifiers = self.toolbarItemIdentifiers;
     return identifiers;
 }
 
-- (NSArray *)toolbarSelectableItemIdentifiers:(NSToolbar *)toolbar
+- (NSArray *)toolbarSelectableItemIdentifiers:(NSToolbar * __unused)toolbar
 {
     NSArray *identifiers = self.toolbarItemIdentifiers;
     return identifiers;
 }
 
-- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag
+- (NSToolbarItem *)toolbar:(NSToolbar * __unused)toolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL __unused)flag
 {
     NSToolbarItem *toolbarItem = [[NSToolbarItem alloc] initWithItemIdentifier:itemIdentifier];
     NSArray *identifiers = self.toolbarItemIdentifiers;
     NSUInteger controllerIndex = [identifiers indexOfObject:itemIdentifier];
     if (controllerIndex != NSNotFound)
     {
-        id <MASPreferencesViewController> controller = [self.viewControllers objectAtIndex:controllerIndex];
-        toolbarItem.image = controller.toolbarItemImage;
+        id <MASPreferencesViewController> controller = [_viewControllers objectAtIndex:controllerIndex];
+        if ([controller respondsToSelector:@selector(toolbarItemImage)])
+            toolbarItem.image = controller.toolbarItemImage;
         toolbarItem.label = controller.toolbarItemLabel;
         toolbarItem.target = self;
         toolbarItem.action = @selector(toolbarItemDidClick:);
     }
-#if !__has_feature(objc_arc)
-    [toolbarItem autorelease];
-#endif
     return toolbarItem;
 }
 
@@ -187,9 +190,9 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (NSViewController <MASPreferencesViewController> *)viewControllerForIdentifier:(NSString *)identifier
 {
-    for (NSViewController <MASPreferencesViewController> *viewController in self.viewControllers) {
-        if ((id)viewController == [NSNull null]) continue;
-        if ([[viewController identifier] isEqualToString:identifier])
+    for (id viewController in self.viewControllers) {
+        if (viewController == [NSNull null]) continue;
+        if ([[viewController viewIdentifier] isEqualToString:identifier])
             return viewController;
     }
     return nil;
@@ -207,22 +210,15 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
         // Check if we can commit changes for old controller
         if (![_selectedViewController commitEditing])
         {
-            [[self.window toolbar] setSelectedItemIdentifier:_selectedViewController.identifier];
+            [[self.window toolbar] setSelectedItemIdentifier:_selectedViewController.viewIdentifier];
             return;
         }
-
-#if __has_feature(objc_arc)
         [self.window setContentView:[[NSView alloc] init]];
-#else
-        [self.window setContentView:[[[NSView alloc] init] autorelease]];
-#endif
         [_selectedViewController setNextResponder:nil];
-        if ([_selectedViewController respondsToSelector:@selector(viewDidDisappear)])
-            [_selectedViewController viewDidDisappear];
-
-#if !__has_feature(objc_arc)
-        [_selectedViewController release];
-#endif
+        // With 10.10 and later AppKit will invoke viewDidDisappear so we need to prevent it from being called twice.
+        if (![NSViewController instancesRespondToSelector:@selector(viewDidDisappear)])
+            if ([_selectedViewController respondsToSelector:@selector(viewDidDisappear)])
+                [_selectedViewController viewDidDisappear];
         _selectedViewController = nil;
     }
 
@@ -236,18 +232,18 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
         self.window.title = label;
     }
 
-    [[self.window toolbar] setSelectedItemIdentifier:controller.identifier];
+    [[self.window toolbar] setSelectedItemIdentifier:controller.viewIdentifier];
 
     // Record new selected controller in user defaults
-    [[NSUserDefaults standardUserDefaults] setObject:controller.identifier forKey:kMASPreferencesSelectedViewKey];
+    [[NSUserDefaults standardUserDefaults] setObject:controller.viewIdentifier forKey:kMASPreferencesSelectedViewKey];
     
     NSView *controllerView = controller.view;
 
     // Retrieve current and minimum frame size for the view
-    NSString *oldViewRectString = [[NSUserDefaults standardUserDefaults] stringForKey:PreferencesKeyForViewBounds(controller.identifier)];
-    NSString *minViewRectString = [_minimumViewRects objectForKey:controller.identifier];
+    NSString *oldViewRectString = [[NSUserDefaults standardUserDefaults] stringForKey:PreferencesKeyForViewBounds(controller.viewIdentifier)];
+    NSString *minViewRectString = [_minimumViewRects objectForKey:controller.viewIdentifier];
     if (!minViewRectString)
-        [_minimumViewRects setObject:NSStringFromRect(controllerView.bounds) forKey:controller.identifier];
+        [_minimumViewRects setObject:NSStringFromRect(controllerView.bounds) forKey:controller.viewIdentifier];
     
     BOOL sizableWidth = ([controller respondsToSelector:@selector(hasResizableWidth)]
                          ? controller.hasResizableWidth
@@ -276,11 +272,8 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
     [self.window setFrame:newFrame display:YES animate:[self.window isVisible]];
     
-#if __has_feature(objc_arc)
     _selectedViewController = controller;
-#else
-    _selectedViewController = [controller retain];
-#endif
+
     // In OSX 10.10, setContentView below calls viewWillAppear.  We still want to call viewWillAppear on < 10.10,
     // so the check below avoids calling viewWillAppear twice on 10.10.
     // See https://github.com/shpakovski/MASPreferences/issues/32 for more info.
@@ -323,13 +316,14 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
 
 - (void)selectControllerWithIdentifier:(NSString *)identifier 
 {
+	NSParameterAssert(identifier.length > 0);
     self.selectedViewController = [self viewControllerForIdentifier:identifier];
 }
 
 #pragma mark -
 #pragma mark Actions
 
-- (IBAction)goNextTab:(id)sender
+- (IBAction)goNextTab:(id __unused)sender
 {
     NSUInteger selectedIndex = self.indexOfSelectedController;
     NSUInteger numberOfControllers = [self.viewControllers count];
@@ -340,7 +334,7 @@ static NSString *const PreferencesKeyForViewBounds (NSString *identifier)
     [self selectControllerAtIndex:selectedIndex];
 }
 
-- (IBAction)goPreviousTab:(id)sender
+- (IBAction)goPreviousTab:(id __unused)sender
 {
     NSUInteger selectedIndex = self.indexOfSelectedController;
     NSUInteger numberOfControllers = [self.viewControllers count];
